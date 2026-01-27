@@ -75,7 +75,7 @@ const subirDocumento = async (req, res) => {
       fecha_emision,
       fecha_vencimiento,
       confidencial,
-      subido_por: req.user.id_usuario
+      subido_por: req.usuario.id_usuario
     });
 
     res.status(201).json(documento);

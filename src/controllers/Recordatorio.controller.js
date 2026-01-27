@@ -4,7 +4,7 @@ const obtenerRecordatorios = async (req, res) => {
   try {
     const { completado } = req.query;
     const where = {
-      id_usuario: req.user.id_usuario
+      id_usuario: req.usuario.id_usuario
     };
     
     if (completado !== undefined) where.completado = completado === 'true';
@@ -26,7 +26,7 @@ const obtenerRecordatorioPorId = async (req, res) => {
     const recordatorio = await Recordatorio.findOne({
       where: { 
         id_recordatorio: id,
-        id_usuario: req.user.id_usuario 
+        id_usuario: req.usuario.id_usuario 
       }
     });
 
@@ -51,7 +51,7 @@ const crearRecordatorio = async (req, res) => {
     } = req.body;
 
     const recordatorio = await Recordatorio.create({
-      id_usuario: req.user.id_usuario,
+      id_usuario: req.usuario.id_usuario,
       titulo,
       descripcion,
       fecha_recordatorio,
@@ -71,7 +71,7 @@ const actualizarRecordatorio = async (req, res) => {
     const recordatorio = await Recordatorio.findOne({
       where: { 
         id_recordatorio: id,
-        id_usuario: req.user.id_usuario 
+        id_usuario: req.usuario.id_usuario 
       }
     });
 
@@ -93,7 +93,7 @@ const completarRecordatorio = async (req, res) => {
     const recordatorio = await Recordatorio.findOne({
       where: { 
         id_recordatorio: id,
-        id_usuario: req.user.id_usuario 
+        id_usuario: req.usuario.id_usuario 
       }
     });
 
@@ -119,7 +119,7 @@ const eliminarRecordatorio = async (req, res) => {
     const recordatorio = await Recordatorio.findOne({
       where: { 
         id_recordatorio: id,
-        id_usuario: req.user.id_usuario 
+        id_usuario: req.usuario.id_usuario 
       }
     });
 
@@ -140,7 +140,7 @@ const obtenerRecordatoriosPendientes = async (req, res) => {
     
     const recordatorios = await Recordatorio.findAll({
       where: {
-        id_usuario: req.user.id_usuario,
+        id_usuario: req.usuario.id_usuario,
         completado: false,
         fecha_recordatorio: {
           [Op.lte]: new Date()

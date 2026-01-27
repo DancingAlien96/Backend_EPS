@@ -127,7 +127,7 @@ const cambiarFase = async (req, res) => {
       fase_nueva,
       justificacion,
       logros_alcanzados,
-      modificado_por: req.user.id_usuario
+      modificado_por: req.usuario.id_usuario
     }, { transaction: t });
 
     // Actualizar la fase del emprendimiento

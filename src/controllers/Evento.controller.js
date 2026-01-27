@@ -39,6 +39,10 @@ const obtenerEventoPorId = async (req, res) => {
 
 const crearEvento = async (req, res) => {
   try {
+    if (!req.usuario) {
+      return res.status(401).json({ error: 'No autorizado' });
+    }
+
     const {
       nombre_evento,
       descripcion,
@@ -52,7 +56,8 @@ const crearEvento = async (req, res) => {
       requiere_inscripcion,
       contacto_responsable,
       telefono_contacto,
-      imagen_evento
+      imagen_evento,
+      estado
     } = req.body;
 
     const evento = await Evento.create({
@@ -69,11 +74,13 @@ const crearEvento = async (req, res) => {
       contacto_responsable,
       telefono_contacto,
       imagen_evento,
-      publicado_por: req.user.id_usuario
+      estado: estado || 'proximo',
+      publicado_por: req.usuario.id_usuario
     });
 
     res.status(201).json(evento);
   } catch (error) {
+    console.error('Error crearEvento:', error);
     res.status(500).json({ error: error.message });
   }
 };

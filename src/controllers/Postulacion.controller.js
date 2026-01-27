@@ -81,7 +81,7 @@ const crearPostulacion = async (req, res) => {
       id_programa,
       id_emprendedor,
       observaciones,
-      postulado_por: req.user.id_usuario
+      postulado_por: req.usuario.id_usuario
     });
 
     res.status(201).json(postulacion);

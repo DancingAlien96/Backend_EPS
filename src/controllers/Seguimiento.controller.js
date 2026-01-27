@@ -65,7 +65,7 @@ const crearSeguimiento = async (req, res) => {
       return res.status(400).json({ error: 'Faltan campos requeridos: id_emprendedor, id_tipo_seguimiento, titulo' });
     }
 
-    const registrado_por = req.user?.id_usuario || 2; // Usuario por defecto si no hay sesión
+    const registrado_por = req.usuario?.id_usuario || 2; // Usuario por defecto si no hay sesión
 
     const seguimiento = await HistorialSeguimiento.create({
       id_emprendedor,

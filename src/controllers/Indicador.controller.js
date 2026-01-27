@@ -79,7 +79,7 @@ const registrarIndicador = async (req, res) => {
       inversion_realizada,
       utilidad_neta,
       observaciones,
-      registrado_por: req.user.id_usuario
+      registrado_por: req.usuario.id_usuario
     });
 
     res.status(201).json(indicador);

@@ -4,7 +4,7 @@ const obtenerNotificaciones = async (req, res) => {
   try {
     const { leida, archivada } = req.query;
     const where = {
-      id_usuario_destino: req.user.id_usuario
+      id_usuario_destino: req.usuario.id_usuario
     };
     
     if (leida !== undefined) where.leida = leida === 'true';
@@ -31,7 +31,7 @@ const obtenerNotificacionPorId = async (req, res) => {
     const notificacion = await Notificacion.findOne({
       where: { 
         id_notificacion: id,
-        id_usuario_destino: req.user.id_usuario 
+        id_usuario_destino: req.usuario.id_usuario 
       },
       include: [
         { model: TipoNotificacion, as: 'tipo' }
@@ -55,7 +55,7 @@ const marcarComoLeida = async (req, res) => {
     const notificacion = await Notificacion.findOne({
       where: { 
         id_notificacion: id,
-        id_usuario_destino: req.user.id_usuario 
+        id_usuario_destino: req.usuario.id_usuario 
       }
     });
 
@@ -83,7 +83,7 @@ const marcarTodasComoLeidas = async (req, res) => {
       },
       {
         where: {
-          id_usuario_destino: req.user.id_usuario,
+          id_usuario_destino: req.usuario.id_usuario,
           leida: false
         }
       }
@@ -102,7 +102,7 @@ const archivarNotificacion = async (req, res) => {
     const notificacion = await Notificacion.findOne({
       where: { 
         id_notificacion: id,
-        id_usuario_destino: req.user.id_usuario 
+        id_usuario_destino: req.usuario.id_usuario 
       }
     });
 
@@ -124,7 +124,7 @@ const eliminarNotificacion = async (req, res) => {
     const notificacion = await Notificacion.findOne({
       where: { 
         id_notificacion: id,
-        id_usuario_destino: req.user.id_usuario 
+        id_usuario_destino: req.usuario.id_usuario 
       }
     });
 
@@ -143,7 +143,7 @@ const contarNoLeidas = async (req, res) => {
   try {
     const count = await Notificacion.count({
       where: {
-        id_usuario_destino: req.user.id_usuario,
+        id_usuario_destino: req.usuario.id_usuario,
         leida: false,
         archivada: false
       }

@@ -93,6 +93,10 @@ const Emprendedor = sequelize.define('Emprendedor', {
     type: DataTypes.STRING(100),
     allowNull: true,
   },
+  rtu_pdf: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+  },
   telefono_negocio: {
     type: DataTypes.STRING(20),
     allowNull: true,

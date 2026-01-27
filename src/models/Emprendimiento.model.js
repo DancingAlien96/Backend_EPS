@@ -24,7 +24,7 @@ const Emprendimiento = sequelize.define('Emprendimiento', {
     allowNull: false,
   },
   fase_emprendimiento: {
-    type: DataTypes.ENUM('idea', 'inicio', 'crecimiento', 'consolidado'),
+    type: DataTypes.ENUM('idea', 'puesta_en_marcha_o_mayor_de_1_ano', 'aceleracion'),
     allowNull: false,
   },
   fecha_inicio: {

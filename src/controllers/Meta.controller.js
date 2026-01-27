@@ -66,7 +66,7 @@ const crearMeta = async (req, res) => {
       fecha_establecida,
       fecha_limite,
       indicador_medicion,
-      establecida_por: req.user.id_usuario
+      establecida_por: req.usuario.id_usuario
     });
 
     res.status(201).json(meta);

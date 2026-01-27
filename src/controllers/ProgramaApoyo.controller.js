@@ -63,7 +63,7 @@ const crearPrograma = async (req, res) => {
       fecha_cierre,
       cupo_maximo,
       documento_adjunto,
-      publicado_por: req.user.id_usuario
+      publicado_por: req.usuario.id_usuario
     });
 
     res.status(201).json(programa);

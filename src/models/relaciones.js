@@ -331,6 +331,16 @@ const configurarRelaciones = () => {
     as: 'emprendedorCreado'
   });
 
+  SolicitudEmprendedor.belongsTo(Organizacion, {
+    foreignKey: 'id_organizacion_creada',
+    as: 'organizacionCreada'
+  });
+
+  SolicitudEmprendedor.belongsTo(Entidad, {
+    foreignKey: 'id_entidad_creada',
+    as: 'entidadCreada'
+  });
+
   // =====================================================
   // RELACIONES DE POSTULACIÓN PROGRAMA
   // =====================================================
@@ -354,7 +364,7 @@ const configurarRelaciones = () => {
   // RELACIONES DE EVENTO
   // =====================================================
   
-  Evento.belongsTo(Municipio, {
+  Evento.belongsTo(MunicipioGT, {
     foreignKey: 'id_municipio',
     as: 'municipio'
   });
