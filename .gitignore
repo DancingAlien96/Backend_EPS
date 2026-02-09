@@ -1,6 +1,8 @@
 node_modules/
 dist/
 .env
+.env.local
+.env.*.local
 uploads/*
 !uploads/.gitkeep
 *.log
@@ -9,3 +11,14 @@ uploads/*
 *.swo
 .vscode/
 .idea/
+
+# Testing
+coverage/
+.nyc_output/
+
+# Firebase private keys
+*-firebase-adminsdk-*.json
+serviceAccountKey*.json
+
+# PM2
+.pm2/
