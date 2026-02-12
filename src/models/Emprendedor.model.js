@@ -7,18 +7,23 @@ const Emprendedor = sequelize.define('Emprendedor', {
     autoIncrement: true,
     primaryKey: true,
   },
+  tipo_emprendedor: {
+    type: DataTypes.ENUM('informal', 'mipyme'),
+    allowNull: true,
+    defaultValue: 'informal',
+  },
   nombre_completo: {
     type: DataTypes.STRING(200),
     allowNull: false,
   },
   dpi: {
     type: DataTypes.STRING(13),
-    allowNull: false,
+    allowNull: true,
     unique: true,
   },
   fecha_nacimiento: {
     type: DataTypes.DATEONLY,
-    allowNull: false,
+    allowNull: true,
   },
   genero: {
     type: DataTypes.ENUM('masculino', 'femenino', 'otro'),
@@ -26,7 +31,7 @@ const Emprendedor = sequelize.define('Emprendedor', {
   },
   telefono: {
     type: DataTypes.STRING(20),
-    allowNull: false,
+    allowNull: true,
   },
   telefono_secundario: {
     type: DataTypes.STRING(20),
@@ -36,13 +41,40 @@ const Emprendedor = sequelize.define('Emprendedor', {
     type: DataTypes.STRING(150),
     allowNull: true,
   },
+  firebase_uid: {
+    type: DataTypes.STRING(128),
+    allowNull: true,
+    unique: true,
+  },
+  tiene_cuenta: {
+    type: DataTypes.BOOLEAN,
+    allowNull: true,
+    defaultValue: false,
+  },
+  cuenta_activa: {
+    type: DataTypes.BOOLEAN,
+    allowNull: true,
+    defaultValue: true,
+  },
+  fecha_ultimo_acceso: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
   id_municipio: {
     type: DataTypes.INTEGER,
-    allowNull: false,
+    allowNull: true,
   },
   // Datos del emprendimiento principal unificados
   nombre_emprendimiento: {
     type: DataTypes.STRING(200),
+    allowNull: true,
+  },
+  razon_social: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+  },
+  nit: {
+    type: DataTypes.STRING(20),
     allowNull: true,
   },
   descripcion_emprendimiento: {
@@ -65,20 +97,36 @@ const Emprendedor = sequelize.define('Emprendedor', {
     type: DataTypes.DATEONLY,
     allowNull: true,
   },
+  fecha_constitucion: {
+    type: DataTypes.DATEONLY,
+    allowNull: true,
+  },
   numero_empleados: {
     type: DataTypes.INTEGER,
     allowNull: true,
     defaultValue: 0,
   },
+  facturacion_anual_aproximada: {
+    type: DataTypes.DECIMAL(15, 2),
+    allowNull: true,
+  },
+  categoria_mipyme: {
+    type: DataTypes.ENUM('micro', 'pequena', 'mediana'),
+    allowNull: true,
+  },
   formalizacion_estado: {
     type: DataTypes.ENUM('formal', 'informal'),
-    allowNull: false,
+    allowNull: true,
     defaultValue: 'informal',
   },
   tiene_patente: {
     type: DataTypes.BOOLEAN,
     allowNull: true,
     defaultValue: false,
+  },
+  numero_patente: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
   },
   patente_archivo: {
     type: DataTypes.STRING(255),
