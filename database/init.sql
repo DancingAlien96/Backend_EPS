@@ -17,14 +17,8 @@ CREATE TABLE usuarios (
     contrasena_hash VARCHAR(255) NOT NULL COMMENT 'Contraseña encriptada con bcrypt',
     rol ENUM(
         'superusuario', 
-        'administrador', 
-        'emprendedor_informal',
-        'emprendedor_mipyme',
-        'entidad_publica',
-        'organizacion_privada',
-        'usuario'
-    ) NOT NULL DEFAULT 'usuario' COMMENT 'Tipo de usuario: superusuario (dueño sistema), administrador (gestores), emprendedor_informal (sin patente), emprendedor_mipyme (formalizado), entidad_publica (gobierno), organizacion_privada (ONG/fundaciones), usuario (visitantes)',
-    tipo_perfil ENUM('emprendedor', 'mipyme', 'entidad_publica', 'organizacion_privada') NULL COMMENT 'Tipo de perfil asociado al usuario',
+        'administrador'
+    ) NOT NULL DEFAULT 'administrador' COMMENT 'Tipo de usuario: superusuario (dueño sistema), administrador (gestores)',
     institucion VARCHAR(200) NULL COMMENT 'Nombre de la institución a la que pertenece (ej: MINECO, Municipalidad de Chiquimula)',
     telefono VARCHAR(20) NULL COMMENT 'Teléfono de contacto',
     foto_perfil VARCHAR(255) NULL COMMENT 'URL de la foto de perfil en Cloudinary',
@@ -32,9 +26,8 @@ CREATE TABLE usuarios (
     fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT 'Cuándo se creó este usuario',
     ultimo_acceso TIMESTAMP NULL COMMENT 'Última vez que inició sesión',
     creado_por INT NULL COMMENT 'ID del usuario que creó esta cuenta',
-    FOREIGN KEY (creado_por) REFERENCES usuarios(id_usuario) ON DELETE SET NULL,
-    INDEX idx_tipo_perfil (tipo_perfil)
-) COMMENT='Usuarios del sistema (administradores y emprendedores con autenticación Firebase)';
+    FOREIGN KEY (creado_por) REFERENCES usuarios(id_usuario) ON DELETE SET NULL
+) COMMENT='Usuarios del sistema (administradores con autenticación)';
 
 -- =====================================================
 -- TABLA: municipios
@@ -583,6 +576,88 @@ CREATE TABLE emprendedores (
 ) COMMENT='Datos personales y del emprendimiento principal de cada emprendedor';
 
 -- =====================================================
+-- TABLA: emprendimientos
+-- Descripción: Emprendimientos adicionales de los emprendedores
+-- Un emprendedor puede tener múltiples emprendimientos
+-- =====================================================
+CREATE TABLE emprendimientos (
+    id_emprendimiento INT AUTO_INCREMENT PRIMARY KEY,
+    id_emprendedor INT NOT NULL COMMENT 'Emprendedor dueño del emprendimiento',
+    nombre_emprendimiento VARCHAR(200) NOT NULL COMMENT 'Nombre comercial del emprendimiento',
+    descripcion TEXT NOT NULL COMMENT 'Descripción del emprendimiento',
+    id_sector INT NOT NULL COMMENT 'Sector económico al que pertenece',
+    fase_emprendimiento ENUM('idea', 'puesta_en_marcha_o_mayor_de_1_ano', 'aceleracion') NOT NULL COMMENT 'Fase actual del emprendimiento',
+    fecha_inicio DATE NULL COMMENT 'Fecha de inicio del emprendimiento',
+    numero_empleados INT NULL DEFAULT 0 COMMENT 'Número de empleados',
+    tiene_registro_formal BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'Si está registrado formalmente',
+    direccion_negocio TEXT NULL COMMENT 'Dirección del negocio',
+    telefono_negocio VARCHAR(20) NULL COMMENT 'Teléfono del negocio',
+    correo_negocio VARCHAR(150) NULL COMMENT 'Correo del negocio',
+    sitio_web VARCHAR(255) NULL COMMENT 'Sitio web del emprendimiento',
+    logo_emprendimiento VARCHAR(255) NULL COMMENT 'URL del logo',
+    estado ENUM('activo', 'pausado', 'cerrado') NOT NULL DEFAULT 'activo' COMMENT 'Estado del emprendimiento',
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    ultima_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_emprendedor) REFERENCES emprendedores(id_emprendedor) ON DELETE CASCADE,
+    FOREIGN KEY (id_sector) REFERENCES sectores_economicos(id_sector) ON DELETE RESTRICT
+) COMMENT='Emprendimientos adicionales de los emprendedores';
+
+-- =====================================================
+-- TABLA: imagenes_emprendimiento
+-- Descripción: Imágenes asociadas a los emprendimientos
+-- =====================================================
+CREATE TABLE imagenes_emprendimiento (
+    id_imagen INT AUTO_INCREMENT PRIMARY KEY,
+    id_emprendimiento INT NOT NULL COMMENT 'Emprendimiento al que pertenece la imagen',
+    ruta_imagen VARCHAR(255) NOT NULL COMMENT 'URL de la imagen en Cloudinary',
+    descripcion VARCHAR(200) NULL COMMENT 'Descripción de la imagen',
+    es_principal BOOLEAN DEFAULT FALSE COMMENT 'Si es la imagen principal del emprendimiento',
+    orden INT DEFAULT 0 COMMENT 'Orden de visualización',
+    fecha_subida TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_emprendimiento) REFERENCES emprendimientos(id_emprendimiento) ON DELETE CASCADE
+) COMMENT='Imágenes de los emprendimientos';
+
+-- =====================================================
+-- TABLA: historial_cambios_fase
+-- Descripción: Historial de cambios de fase de emprendimientos
+-- =====================================================
+CREATE TABLE historial_cambios_fase (
+    id_cambio INT AUTO_INCREMENT PRIMARY KEY,
+    id_emprendimiento INT NOT NULL COMMENT 'Emprendimiento que cambió de fase',
+    fase_anterior ENUM('idea', 'inicio', 'crecimiento', 'consolidado') NOT NULL COMMENT 'Fase anterior',
+    fase_nueva ENUM('idea', 'inicio', 'crecimiento', 'consolidado') NOT NULL COMMENT 'Nueva fase',
+    fecha_cambio TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT 'Fecha del cambio',
+    justificacion TEXT NOT NULL COMMENT 'Razón del cambio de fase',
+    logros_alcanzados TEXT NULL COMMENT 'Logros que motivaron el cambio',
+    modificado_por INT NOT NULL COMMENT 'Usuario que realizó el cambio',
+    FOREIGN KEY (id_emprendimiento) REFERENCES emprendimientos(id_emprendimiento) ON DELETE CASCADE,
+    FOREIGN KEY (modificado_por) REFERENCES usuarios(id_usuario) ON DELETE RESTRICT
+) COMMENT='Historial de cambios de fase de emprendimientos';
+
+-- =====================================================
+-- TABLA: indicadores_desempeno
+-- Descripción: Indicadores de desempeño mensuales de emprendimientos
+-- =====================================================
+CREATE TABLE indicadores_desempeno (
+    id_indicador INT AUTO_INCREMENT PRIMARY KEY,
+    id_emprendimiento INT NOT NULL COMMENT 'Emprendimiento al que pertenece',
+    periodo_mes INT NOT NULL COMMENT 'Mes del periodo (1-12)',
+    periodo_año INT NOT NULL COMMENT 'Año del periodo',
+    ventas_mensuales DECIMAL(10, 2) NULL COMMENT 'Ventas del mes',
+    unidades_vendidas INT NULL COMMENT 'Unidades vendidas',
+    nuevos_clientes INT NULL COMMENT 'Nuevos clientes adquiridos',
+    empleos_generados INT NULL COMMENT 'Empleos generados',
+    inversion_realizada DECIMAL(10, 2) NULL COMMENT 'Inversión realizada',
+    utilidad_neta DECIMAL(10, 2) NULL COMMENT 'Utilidad neta del periodo',
+    observaciones TEXT NULL COMMENT 'Observaciones adicionales',
+    registrado_por INT NOT NULL COMMENT 'Usuario que registró los indicadores',
+    fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_emprendimiento) REFERENCES emprendimientos(id_emprendimiento) ON DELETE CASCADE,
+    FOREIGN KEY (registrado_por) REFERENCES usuarios(id_usuario) ON DELETE RESTRICT,
+    UNIQUE KEY uq_periodo (id_emprendimiento, periodo_mes, periodo_año)
+) COMMENT='Indicadores de desempeño mensuales';
+
+-- =====================================================
 -- TABLA: programas_apoyo
 -- Descripción: Programas, convocatorias o capacitaciones ofrecidas por instituciones
 -- Los administradores publican estos programas
@@ -1086,213 +1161,9 @@ CREATE TABLE IF NOT EXISTS bookmarks (
     INDEX idx_bookmark_noticia (id_noticia)
 );
 
--- =====================================================
--- TABLA: entidades_publicas
--- Descripción: Perfiles de entidades públicas (gobierno, municipalidades, etc.)
--- =====================================================
-CREATE TABLE entidades_publicas (
-    id_entidad INT AUTO_INCREMENT PRIMARY KEY,
-    id_usuario INT NOT NULL UNIQUE COMMENT 'Usuario asociado a esta entidad',
-    nombre_entidad VARCHAR(255) NOT NULL COMMENT 'Nombre oficial de la entidad',
-    tipo_entidad ENUM(
-        'ministerio', 
-        'secretaria', 
-        'direccion', 
-        'municipalidad', 
-        'gobernacion',
-        'otra'
-    ) NOT NULL COMMENT 'Tipo de entidad pública',
-    nit_institucional VARCHAR(20) NULL COMMENT 'NIT de la institución',
-    siglas VARCHAR(20) NULL COMMENT 'Acrónimo o siglas (ej: MINECO, MAGA)',
-    
-    -- Persona de contacto
-    nombre_contacto VARCHAR(200) NOT NULL COMMENT 'Nombre completo del responsable',
-    cargo_contacto VARCHAR(150) NULL COMMENT 'Cargo del responsable',
-    telefono_contacto VARCHAR(20) NOT NULL COMMENT 'Teléfono de contacto principal',
-    telefono_secundario VARCHAR(20) NULL COMMENT 'Teléfono alternativo',
-    correo_contacto VARCHAR(150) NOT NULL COMMENT 'Email del responsable',
-    
-    -- Ubicación
-    id_departamento INT NULL COMMENT 'Departamento donde se ubica',
-    id_municipio INT NULL COMMENT 'Municipio donde se ubica',
-    direccion_completa TEXT NULL COMMENT 'Dirección oficial de la entidad',
-    
-    -- Información institucional
-    descripcion_entidad TEXT NULL COMMENT 'Descripción de la entidad y sus funciones',
-    areas_enfoque TEXT NULL COMMENT 'Áreas de trabajo o sectores que atiende',
-    sitio_web VARCHAR(255) NULL COMMENT 'Sitio web oficial',
-    logo_entidad VARCHAR(255) NULL COMMENT 'URL del logo oficial',
-    
-    -- Documento de acreditación
-    documento_acreditacion VARCHAR(255) NULL COMMENT 'Documento que acredita representación oficial',
-    
-    -- Control
-    estado ENUM('pendiente', 'activo', 'inactivo') NOT NULL DEFAULT 'pendiente' 
-    COMMENT 'Estado de verificación de la entidad',
-    fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    fecha_aprobacion TIMESTAMP NULL COMMENT 'Cuándo fue aprobada la cuenta',
-    aprobado_por INT NULL COMMENT 'Administrador que aprobó',
-    observaciones TEXT NULL COMMENT 'Notas del administrador',
-    ultima_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
-    FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario) ON DELETE CASCADE,
-    FOREIGN KEY (id_departamento) REFERENCES departamentos_gt(id_departamento) ON DELETE SET NULL,
-    FOREIGN KEY (id_municipio) REFERENCES municipios_gt(id_municipio) ON DELETE SET NULL,
-    FOREIGN KEY (aprobado_por) REFERENCES usuarios(id_usuario) ON DELETE SET NULL,
-    INDEX idx_tipo_entidad (tipo_entidad),
-    INDEX idx_estado (estado)
-) COMMENT='Perfiles de entidades públicas (gobierno, municipalidades, etc.)';
 
--- =====================================================
--- TABLA: organizaciones_privadas
--- Descripción: Perfiles de organizaciones privadas de apoyo (ONG, fundaciones, empresas)
--- =====================================================
-CREATE TABLE organizaciones_privadas (
-    id_organizacion INT AUTO_INCREMENT PRIMARY KEY,
-    id_usuario INT NOT NULL UNIQUE COMMENT 'Usuario asociado a esta organización',
-    nombre_organizacion VARCHAR(255) NOT NULL COMMENT 'Nombre legal de la organización',
-    tipo_organizacion ENUM(
-        'ong', 
-        'fundacion', 
-        'asociacion',
-        'cooperativa',
-        'empresa_privada',
-        'camara_comercio',
-        'gremial',
-        'otra'
-    ) NOT NULL COMMENT 'Tipo de organización',
-    
-    -- Datos legales
-    razon_social VARCHAR(255) NOT NULL COMMENT 'Razón social registrada',
-    nit VARCHAR(20) NULL COMMENT 'NIT de la organización',
-    numero_registro VARCHAR(100) NULL COMMENT 'Número de registro (Gobernación, SAT, etc.)',
-    fecha_constitucion DATE NULL COMMENT 'Fecha de constitución legal',
-    documento_constitucion VARCHAR(255) NULL COMMENT 'Acta de constitución o documento legal',
-    
-    -- Persona de contacto
-    nombre_contacto VARCHAR(200) NOT NULL COMMENT 'Nombre completo del representante',
-    cargo_contacto VARCHAR(150) NULL COMMENT 'Cargo del representante',
-    telefono_contacto VARCHAR(20) NOT NULL COMMENT 'Teléfono de contacto principal',
-    telefono_secundario VARCHAR(20) NULL COMMENT 'Teléfono alternativo',
-    correo_contacto VARCHAR(150) NOT NULL COMMENT 'Email del representante',
-    
-    -- Ubicación
-    id_departamento INT NULL COMMENT 'Departamento donde se ubica',
-    id_municipio INT NULL COMMENT 'Municipio donde se ubica',
-    direccion_completa TEXT NULL COMMENT 'Dirección de oficinas',
-    cobertura_geografica TEXT NULL COMMENT 'Municipios o departamentos donde trabajan',
-    
-    -- Información organizacional
-    descripcion_organizacion TEXT NULL COMMENT 'Descripción de la organización y su misión',
-    areas_enfoque TEXT NULL COMMENT 'Áreas de trabajo (empleabilidad, financiamiento, etc.)',
-    sectores_atiende TEXT NULL COMMENT 'Sectores económicos que atienden',
-    servicios_ofrecidos TEXT NULL COMMENT 'Servicios o programas que ofrecen',
-    poblacion_objetivo TEXT NULL COMMENT 'A quién benefician (emprendedores, MIPYME, mujeres, etc.)',
-    
-    -- Presencia digital
-    sitio_web VARCHAR(255) NULL COMMENT 'Sitio web oficial',
-    facebook VARCHAR(255) NULL COMMENT 'Página de Facebook',
-    instagram VARCHAR(255) NULL COMMENT 'Perfil de Instagram',
-    linkedin VARCHAR(255) NULL COMMENT 'Perfil de LinkedIn',
-    logo_organizacion VARCHAR(255) NULL COMMENT 'URL del logo',
-    
-    -- Control
-    estado ENUM('pendiente', 'activo', 'inactivo') NOT NULL DEFAULT 'pendiente' 
-    COMMENT 'Estado de verificación de la organización',
-    fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    fecha_aprobacion TIMESTAMP NULL COMMENT 'Cuándo fue aprobada la cuenta',
-    aprobado_por INT NULL COMMENT 'Administrador que aprobó',
-    observaciones TEXT NULL COMMENT 'Notas del administrador',
-    ultima_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
-    FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario) ON DELETE CASCADE,
-    FOREIGN KEY (id_departamento) REFERENCES departamentos_gt(id_departamento) ON DELETE SET NULL,
-    FOREIGN KEY (id_municipio) REFERENCES municipios_gt(id_municipio) ON DELETE SET NULL,
-    FOREIGN KEY (aprobado_por) REFERENCES usuarios(id_usuario) ON DELETE SET NULL,
-    INDEX idx_tipo_organizacion (tipo_organizacion),
-    INDEX idx_estado (estado)
-) COMMENT='Perfiles de organizaciones privadas de apoyo (ONG, fundaciones, empresas)';
 
--- =====================================================
--- TABLA: solicitudes_registro
--- Descripción: Solicitudes de registro pendientes de aprobación
--- =====================================================
-CREATE TABLE solicitudes_registro (
-    id_solicitud INT AUTO_INCREMENT PRIMARY KEY,
-    tipo_solicitud ENUM(
-        'emprendedor_informal',
-        'emprendedor_mipyme',
-        'entidad_publica',
-        'organizacion_privada'
-    ) NOT NULL COMMENT 'Tipo de registro solicitado',
-    
-    -- Datos del formulario (JSON para flexibilidad)
-    datos_formulario JSON NOT NULL COMMENT 'Datos completos del formulario de registro',
-    
-    -- Archivos adjuntos
-    archivos_adjuntos JSON NULL COMMENT 'URLs de documentos subidos (patente, RTU, etc.)',
-    
-    -- Datos de contacto principales
-    correo_electronico VARCHAR(150) NOT NULL COMMENT 'Email del solicitante',
-    telefono VARCHAR(20) NOT NULL COMMENT 'Teléfono del solicitante',
-    nombre_solicitante VARCHAR(200) NOT NULL COMMENT 'Nombre completo o razón social',
-    
-    -- Estado de la solicitud
-    estado ENUM('pendiente', 'en_revision', 'aprobada', 'rechazada') NOT NULL DEFAULT 'pendiente',
-    motivo_rechazo TEXT NULL COMMENT 'Razón por la cual fue rechazada',
-    
-    -- Control
-    fecha_solicitud TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    fecha_revision TIMESTAMP NULL COMMENT 'Cuándo fue revisada',
-    revisada_por INT NULL COMMENT 'Administrador que revisó',
-    id_usuario_creado INT NULL COMMENT 'ID del usuario creado si fue aprobada',
-    
-    FOREIGN KEY (revisada_por) REFERENCES usuarios(id_usuario) ON DELETE SET NULL,
-    FOREIGN KEY (id_usuario_creado) REFERENCES usuarios(id_usuario) ON DELETE SET NULL,
-    INDEX idx_estado (estado),
-    INDEX idx_tipo_solicitud (tipo_solicitud),
-    INDEX idx_correo (correo_electronico)
-) COMMENT='Solicitudes de registro pendientes de aprobación';
 
--- =====================================================
--- TRIGGERS AUTOMÁTICOS
--- =====================================================
-
-DELIMITER $$
-
--- Trigger para actualizar tipo_perfil en usuarios al crear emprendedor
-CREATE TRIGGER after_emprendedor_insert
-AFTER INSERT ON emprendedores
-FOR EACH ROW
-BEGIN
-    IF NEW.firebase_uid IS NOT NULL THEN
-        UPDATE usuarios 
-        SET tipo_perfil = IF(NEW.tipo_emprendedor = 'mipyme', 'mipyme', 'emprendedor')
-        WHERE firebase_uid = NEW.firebase_uid;
-    END IF;
-END$$
-
--- Trigger para actualizar tipo_perfil al crear entidad pública
-CREATE TRIGGER after_entidad_publica_insert
-AFTER INSERT ON entidades_publicas
-FOR EACH ROW
-BEGIN
-    UPDATE usuarios 
-    SET tipo_perfil = 'entidad_publica'
-    WHERE id_usuario = NEW.id_usuario;
-END$$
-
--- Trigger para actualizar tipo_perfil al crear organización privada
-CREATE TRIGGER after_organizacion_privada_insert
-AFTER INSERT ON organizaciones_privadas
-FOR EACH ROW
-BEGIN
-    UPDATE usuarios 
-    SET tipo_perfil = 'organizacion_privada'
-    WHERE id_usuario = NEW.id_usuario;
-END$$
-
-DELIMITER ;
 
 -- =====================================================
 -- FIN DEL SCRIPT
