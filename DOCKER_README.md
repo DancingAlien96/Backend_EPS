@@ -1,60 +1,135 @@
-# Uso de MySQL con Docker
+# Despliegue en servidor (Backend + MySQL)
 
-## Iniciar el contenedor MySQL
+Esta guía deja documentado cómo levantar el backend en un servidor de forma estable.
 
-1. **Levantar el contenedor:**
-   ```powershell
-   docker-compose up -d
-   ```
+## Estado actual del repositorio
 
-2. **Ver logs del contenedor:**
-   ```powershell
-   docker logs eps-mysql
-   ```
+- El archivo [docker-compose.yml](docker-compose.yml) actualmente levanta **MySQL**.
+- El backend Node.js se ejecuta en el host (recomendado usar `pm2` o `systemd`).
 
-3. **Verificar que está corriendo:**
-   ```powershell
-   docker ps
-   ```
+Si más adelante quieres dockerizar también la API, se puede agregar un servicio `backend` al compose, pero este documento cubre el flujo que ya existe en el proyecto.
 
-## Configurar el backend
+## 1) Prerrequisitos del servidor
 
-1. **Copiar configuración de entorno:**
-   ```powershell
-   cp .env.docker .env
-   ```
+- Docker Engine
+- Docker Compose (`docker compose`)
+- Node.js 20+
+- npm 10+
+- Git
 
-2. **Iniciar el backend:**
-   ```powershell
-   npm run dev
-   ```
+## 2) Clonar y preparar proyecto
 
-## Comandos útiles
+```bash
+git clone <URL_DEL_REPO> backend-eps
+cd backend-eps
+```
 
-- **Detener el contenedor:**
-  ```powershell
-  docker-compose down
-  ```
+## 3) Variables de entorno
 
-- **Reiniciar el contenedor:**
-  ```powershell
-  docker-compose restart
-  ```
+Crear `.env` para servidor (no versionar secretos):
 
-- **Eliminar todo (incluyendo datos):**
-  ```powershell
-  docker-compose down -v
-  ```
+```env
+DB_HOST=127.0.0.1
+DB_PORT=3307
+DB_NAME=sistema_emprendedores_chiquimula
+DB_USER=root
+DB_PASSWORD=TU_PASSWORD_SEGURA
 
-- **Acceder a MySQL CLI:**
-  ```powershell
-  docker exec -it eps-mysql mysql -uroot -p65cristofer sistema_emprendedores_chiquimula
-  ```
+PORT=3000
+NODE_ENV=production
 
-## Ventajas de usar Docker
+# Firebase Admin SDK
+FIREBASE_PROJECT_ID=
+FIREBASE_CLIENT_EMAIL=
+FIREBASE_PRIVATE_KEY=
 
-✅ No hay problemas de caché de MySQL  
-✅ Base de datos limpia cada vez que recreas el contenedor  
-✅ Fácil de resetear: `docker-compose down -v && docker-compose up -d`  
-✅ Mismo entorno en desarrollo y producción  
-✅ No interfiere con MySQL local (usa puerto 3307)
+# Cloudinary (si aplica)
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_API_KEY=
+CLOUDINARY_API_SECRET=
+```
+
+Nota: si usas `FIREBASE_PRIVATE_KEY` en una sola línea, respeta escapes `\\n`.
+
+## 4) Levantar MySQL en contenedor
+
+```bash
+docker compose up -d
+docker compose ps
+docker logs --tail 80 eps-mysql
+```
+
+Comprobación rápida de conexión:
+
+```bash
+docker exec -it eps-mysql mysql -uroot -p
+```
+
+## 5) Levantar backend en servidor
+
+```bash
+npm ci --omit=dev
+npm run start
+```
+
+Para producción se recomienda proceso administrado. Ejemplo con PM2:
+
+```bash
+npm install -g pm2
+pm2 start app.js --name backend-eps
+pm2 save
+pm2 startup
+```
+
+## 6) Verificar que todo quedó arriba
+
+- API: `GET http://<IP_O_DOMINIO>:3000/`
+- BD: `docker compose ps`
+- Logs API (PM2): `pm2 logs backend-eps`
+- Logs MySQL: `docker logs --tail 100 eps-mysql`
+
+## 7) Cómo aplicar cambios nuevos del repo
+
+Cada vez que subas cambios y quieras actualizar servidor:
+
+```bash
+cd backend-eps
+git pull
+
+# Recreate MySQL service definition if compose changed
+docker compose up -d
+
+# Refresh backend dependencies and restart service
+npm ci --omit=dev
+pm2 restart backend-eps --update-env
+```
+
+Si no usas PM2, reinicia el proceso del backend con tu gestor actual (`systemd`, supervisor, etc.).
+
+## 8) Comandos útiles
+
+- Detener MySQL:
+
+```bash
+docker compose stop mysql
+```
+
+- Reiniciar MySQL:
+
+```bash
+docker compose restart mysql
+```
+
+- Bajar contenedor y red:
+
+```bash
+docker compose down
+```
+
+- Borrado total (incluye datos):
+
+```bash
+docker compose down -v
+```
+
+Usar `down -v` solo si deseas reinicializar la base de datos desde cero.

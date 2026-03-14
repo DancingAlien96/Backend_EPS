@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 const { testConnection } = require('./src/config/database');
+const { initializeFirebase } = require('./src/config/firebase');
 const routes = require('./src/routes');
 const { errorHandler, notFound } = require('./src/middleware/errorHandler');
 const configurarRelaciones = require('./src/models/relaciones');
@@ -35,8 +36,15 @@ app.use(errorHandler);
 // Iniciar servidor
 const startServer = async () => {
   try {
+    // Inicializar Firebase Admin (opcional)
+    initializeFirebase();
+    
+    // Conectar a la base de datos
     await testConnection();
+    
+    // Configurar relaciones de Sequelize
     configurarRelaciones();
+    
     app.listen(PORT, () => {
       console.log(`✓ Servidor corriendo en http://localhost:${PORT}`);
       console.log(`✓ Entorno: ${process.env.NODE_ENV || 'development'}`);

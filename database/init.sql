@@ -642,7 +642,7 @@ CREATE TABLE indicadores_desempeno (
     id_indicador INT AUTO_INCREMENT PRIMARY KEY,
     id_emprendimiento INT NOT NULL COMMENT 'Emprendimiento al que pertenece',
     periodo_mes INT NOT NULL COMMENT 'Mes del periodo (1-12)',
-    periodo_año INT NOT NULL COMMENT 'Año del periodo',
+    periodo_anio INT NOT NULL COMMENT 'Año del periodo',
     ventas_mensuales DECIMAL(10, 2) NULL COMMENT 'Ventas del mes',
     unidades_vendidas INT NULL COMMENT 'Unidades vendidas',
     nuevos_clientes INT NULL COMMENT 'Nuevos clientes adquiridos',
@@ -654,7 +654,7 @@ CREATE TABLE indicadores_desempeno (
     fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (id_emprendimiento) REFERENCES emprendimientos(id_emprendimiento) ON DELETE CASCADE,
     FOREIGN KEY (registrado_por) REFERENCES usuarios(id_usuario) ON DELETE RESTRICT,
-    UNIQUE KEY uq_periodo (id_emprendimiento, periodo_mes, periodo_año)
+    UNIQUE KEY uq_periodo (id_emprendimiento, periodo_mes, periodo_anio)
 ) COMMENT='Indicadores de desempeño mensuales';
 
 -- =====================================================
@@ -936,7 +936,7 @@ CREATE TABLE documentos_emprendedor (
     tipo_documento ENUM('contrato', 'certificado', 'permiso', 'licencia', 'acta', 'otro') NOT NULL,
     descripcion TEXT NULL,
     ruta_archivo VARCHAR(255) NOT NULL COMMENT 'Ubicación del archivo en el servidor',
-    tamaño_archivo INT NULL COMMENT 'Tamaño en bytes',
+    tamano_archivo INT NULL COMMENT 'Tamaño en bytes',
     tipo_mime VARCHAR(100) NULL COMMENT 'Tipo MIME del archivo',
     fecha_emision DATE NULL COMMENT 'Fecha del documento',
     fecha_vencimiento DATE NULL COMMENT 'Si el documento expira',
@@ -1087,6 +1087,12 @@ INSERT INTO tipos_notificacion (nombre_tipo, descripcion, prioridad, color_notif
 ('solicitud_aprobada', 'Solicitud de emprendedor aprobada', 'baja', '#7ED321', 'check-circle', TRUE),
 ('solicitud_rechazada', 'Solicitud de emprendedor rechazada', 'baja', '#D0021B', 'times-circle', TRUE),
 
+-- Verificación de Perfiles (Sistema de Registro Progresivo)
+('perfil_pendiente_revision', 'Nuevo perfil completo pendiente de revisión', 'alta', '#FF6B6B', 'user-clock', FALSE),
+('perfil_aprobado', 'Tu perfil ha sido aprobado y verificado', 'alta', '#7ED321', 'user-check', FALSE),
+('perfil_rechazado', 'Tu perfil no fue aprobado', 'alta', '#D0021B', 'user-times', FALSE),
+('perfil_en_revision', 'Tu perfil está siendo revisado por un administrador', 'media', '#4A90E2', 'user-cog', TRUE),
+
 -- Seguimiento
 ('seguimiento_pendiente', 'Seguimiento pendiente para emprendedor', 'media', '#9013FE', 'clipboard-list', TRUE),
 ('necesidad_sin_resolver', 'Necesidad detectada sin resolver (más de 15 días)', 'alta', '#FF6B6B', 'exclamation-triangle', TRUE),
@@ -1161,9 +1167,489 @@ CREATE TABLE IF NOT EXISTS bookmarks (
     INDEX idx_bookmark_noticia (id_noticia)
 );
 
+-- =====================================================
+-- SISTEMA DE REGISTRO PROGRESIVO
+-- Tablas para sistema de registro por pasos con perfil progresivo
+-- =====================================================
 
+-- Tabla principal: USUARIOS (AUTENTICACIÓN)
+-- Separa autenticación de perfiles específicos
+CREATE TABLE IF NOT EXISTS users (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  email VARCHAR(100) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  nombre_completo VARCHAR(200) NOT NULL,
+  telefono_whatsapp VARCHAR(20) NOT NULL,
+  
+  -- Tipo de miembro (define qué perfil crear)
+  member_type ENUM(
+    'emprendimiento',
+    'empresa',
+    'organizacion',
+    'institucion',
+    'consumidor'
+  ) NOT NULL,
+  
+  -- Datos opcionales del Paso 1
+  numero_identificacion VARCHAR(50) NULL COMMENT 'DPI o NIT',
+  fecha_nacimiento DATE NULL,
+  municipio_id INT NULL,
+  departamento_id INT NULL,
+  
+  -- Estado de la cuenta
+  is_active BOOLEAN DEFAULT TRUE,
+  is_email_verified BOOLEAN DEFAULT FALSE,
+  email_verification_token VARCHAR(100) NULL,
+  password_reset_token VARCHAR(100) NULL,
+  password_reset_expires TIMESTAMP NULL,
+  
+  -- Control registro
+  registration_completed BOOLEAN DEFAULT FALSE COMMENT 'Si completó todos los pasos',
+  registration_approved BOOLEAN DEFAULT FALSE COMMENT 'Si fue aprobado por admin (deprecated, usar approval_status)',
+  
+  -- Estado de aprobación (nuevo sistema)
+  approval_status ENUM('pending', 'approved', 'rejected') DEFAULT 'pending' COMMENT 'Estado de verificación del perfil',
+  rejection_reason TEXT NULL COMMENT 'Motivo por el que se rechazó el perfil',
+  reviewed_at TIMESTAMP NULL COMMENT 'Cuándo fue revisado por admin',
+  reviewed_by INT NULL COMMENT 'ID del admin que revisó',
+  
+  approved_by INT NULL COMMENT 'Admin que aprobó (deprecated, usar reviewed_by)',
+  approved_at TIMESTAMP NULL COMMENT 'Cuándo fue aprobado (deprecated, usar reviewed_at)',
+  
+  -- Auditoría
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  last_login_at TIMESTAMP NULL,
+  
+  -- Claves foráneas
+  FOREIGN KEY (municipio_id) REFERENCES municipios_gt(id_municipio),
+  FOREIGN KEY (departamento_id) REFERENCES departamentos_gt(id_departamento),
+  FOREIGN KEY (approved_by) REFERENCES usuarios(id_usuario),
+  FOREIGN KEY (reviewed_by) REFERENCES usuarios(id_usuario),
+  
+  -- Índices
+  INDEX idx_email (email),
+  INDEX idx_member_type (member_type),
+  INDEX idx_registration_status (registration_completed, registration_approved),
+  INDEX idx_approval_status (approval_status),
+  INDEX idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Tabla: PROGRESO DE REGISTRO
+-- Rastrea en qué paso está el usuario
+CREATE TABLE IF NOT EXISTS registration_progress (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  user_id INT NOT NULL UNIQUE,
+  
+  -- Paso actual (0-6)
+  current_step INT DEFAULT 0 COMMENT 'Último paso completado',
+  
+  -- Progreso por paso (JSON con timestamp)
+  step_0_completed BOOLEAN DEFAULT FALSE,
+  step_0_completed_at TIMESTAMP NULL,
+  
+  step_1_completed BOOLEAN DEFAULT TRUE COMMENT 'Auto TRUE al crear usuario',
+  step_1_completed_at TIMESTAMP NULL,
+  
+  step_2_completed BOOLEAN DEFAULT FALSE,
+  step_2_completed_at TIMESTAMP NULL,
+  step_2_skipped BOOLEAN DEFAULT FALSE,
+  
+  step_3_completed BOOLEAN DEFAULT FALSE,
+  step_3_completed_at TIMESTAMP NULL,
+  step_3_skipped BOOLEAN DEFAULT FALSE,
+  
+  step_4_completed BOOLEAN DEFAULT FALSE,
+  step_4_completed_at TIMESTAMP NULL,
+  step_4_skipped BOOLEAN DEFAULT FALSE,
+  
+  step_5_completed BOOLEAN DEFAULT FALSE,
+  step_5_completed_at TIMESTAMP NULL,
+  step_5_skipped BOOLEAN DEFAULT FALSE,
+  
+  step_6_completed BOOLEAN DEFAULT FALSE,
+  step_6_completed_at TIMESTAMP NULL,
+  step_6_skipped BOOLEAN DEFAULT FALSE,
+  
+  -- Porcentaje de completitud (calculado)
+  completion_percentage INT DEFAULT 20 COMMENT 'Paso 1 da 20% inicial',
+  
+  -- Control
+  started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  last_updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  completed_at TIMESTAMP NULL COMMENT 'Cuando llega a 100%',
+  
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_completion (completion_percentage),
+  INDEX idx_current_step (current_step)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Tabla: PERFILES DE EMPRENDIMIENTOS Y EMPRESAS
+-- Información del negocio (tipo 'emprendimiento' o 'empresa')
+CREATE TABLE IF NOT EXISTS venture_profiles (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  user_id INT NOT NULL UNIQUE,
+  
+  -- PASO 2: Perfil Base
+  nombre_emprendimiento VARCHAR(255) NOT NULL,
+  descripcion_corta TEXT NULL,
+  sector_id INT NULL,
+  etapa_negocio ENUM('idea', 'inicio', 'crecimiento', 'consolidacion') NULL,
+  fecha_inicio DATE NULL,
+  tiene_logo BOOLEAN DEFAULT FALSE,
+  logo_url VARCHAR(500) NULL,
+  
+  -- PASO 3: Ventas y Pagos
+  canales_venta JSON NULL COMMENT 'Array: ["ferias", "whatsapp", "tienda_fisica"]',
+  metodos_pago JSON NULL COMMENT 'Array: ["efectivo", "transferencia", "tarjeta"]',
+  usa_pasarela_pago BOOLEAN DEFAULT FALSE,
+  proveedor_pasarela VARCHAR(100) NULL COMMENT 'pagadito, neonet, visanet, etc.',
+  tipo_cuenta_bancaria ENUM('personal', 'empresarial', 'cooperativa', 'billetera_digital') NULL,
+  
+  -- PASO 4: Logística y Presencia Digital
+  realiza_envios ENUM('no', 'solo_local', 'nacional') NULL,
+  metodos_envio JSON NULL COMMENT 'Array: ["guatex", "cargo_expreso", "mensajeria"]',
+  politica_cobro_envio ENUM('gratis', 'cliente_paga', 'segun_monto') NULL,
+  
+  -- Redes sociales
+  facebook_url VARCHAR(255) NULL,
+  instagram_url VARCHAR(255) NULL,
+  tiktok_url VARCHAR(255) NULL,
+  whatsapp_business VARCHAR(50) NULL,
+  sitio_web VARCHAR(255) NULL,
+  
+  -- PASO 5: Formalización
+  registro_SAT BOOLEAN DEFAULT FALSE,
+  nit VARCHAR(20) NULL,
+  puede_emitir_facturas BOOLEAN DEFAULT FALSE,
+  archivo_rtu VARCHAR(500) NULL COMMENT 'URL Cloudinary',
+  
+  estado_registro_mercantil ENUM('no', 'en_tramite', 'registrado') DEFAULT 'no',
+  
+  tiene_patente_comercio BOOLEAN DEFAULT FALSE,
+  numero_patente VARCHAR(100) NULL,
+  archivo_patente VARCHAR(500) NULL,
+  
+  interes_registro_marca ENUM('no', 'me_interesa', 'ya_tengo') DEFAULT 'no',
+  estado_marca VARCHAR(200) NULL COMMENT 'Número o nombre de marca registrada',
+  
+  otros_registros TEXT NULL COMMENT 'Sanitario, MAGA, exportación, etc.',
+  
+  -- PASO 6: Intereses y Apoyos
+  necesidades_apoyo JSON NULL COMMENT 'Array de necesidades seleccionadas',
+  
+  -- Control
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (sector_id) REFERENCES sectores_economicos(id_sector),
+  
+  INDEX idx_sector (sector_id),
+  INDEX idx_etapa (etapa_negocio),
+  INDEX idx_formalizacion (registro_SAT, tiene_patente_comercio)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Tabla: PERFILES DE ORGANIZACIONES E INSTITUCIONES
+-- Para tipo 'organizacion' o 'institucion'
+CREATE TABLE IF NOT EXISTS organization_profiles (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  user_id INT NOT NULL UNIQUE,
+  
+  -- PASO 2: Perfil Base
+  nombre_entidad VARCHAR(255) NOT NULL,
+  tipo_entidad ENUM(
+    'ong',
+    'asociacion',
+    'cooperativa',
+    'incubadora',
+    'fundacion',
+    'institucion_publica',
+    'otra'
+  ) NOT NULL,
+  descripcion_mision TEXT NULL,
+  anio_fundacion YEAR NULL,
+  tiene_logo BOOLEAN DEFAULT FALSE,
+  logo_url VARCHAR(500) NULL,
+  
+  -- PASO 3: Ámbito y Permisos
+  ambito_geografico JSON NULL COMMENT 'Array de municipio IDs',
+  puede_publicar_programas BOOLEAN DEFAULT FALSE,
+  puede_publicar_eventos BOOLEAN DEFAULT FALSE,
+  puede_publicar_noticias BOOLEAN DEFAULT FALSE,
+  
+  -- PASO 4: Presencia Digital
+  facebook_url VARCHAR(255) NULL,
+  instagram_url VARCHAR(255) NULL,
+  sitio_web VARCHAR(255) NULL,
+  telefono_contacto VARCHAR(20) NULL,
+  
+  -- PASO 6: Apoyos Ofrecidos
+  tipos_apoyo_ofrecidos JSON NULL COMMENT 'capacitaciones, financiamiento, asesoria, etc.',
+  
+  -- Control
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  
+  INDEX idx_tipo_entidad (tipo_entidad)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Tabla: PERFILES DE CONSUMIDORES
+-- Para tipo 'consumidor'
+CREATE TABLE IF NOT EXISTS consumer_profiles (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  user_id INT NOT NULL UNIQUE,
+  
+  -- PASO 2: Intereses
+  intereses JSON NULL COMMENT 'Tags: artesanias, alimentos, tecnologia, etc.',
+  categorias_favoritas JSON NULL COMMENT 'Array de sector IDs',
+  
+  -- PASO 6: Suscripciones
+  suscribirse_noticias BOOLEAN DEFAULT FALSE,
+  suscribirse_eventos BOOLEAN DEFAULT FALSE,
+  
+  -- Control
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Tabla: ROLES DE USUARIO
+-- Permisos dinámicos (un usuario puede tener varios roles)
+CREATE TABLE IF NOT EXISTS user_roles (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  user_id INT NOT NULL,
+  role_name ENUM(
+    'usuario_autenticado',
+    'emprendedor_verificado',
+    'empresa_verificada',
+    'organizacion_aprobada',
+    'institucion_publica',
+    'consumidor',
+    'administrador',
+    'super_admin'
+  ) NOT NULL,
+  granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  granted_by INT NULL COMMENT 'ID del admin que otorgó el rol',
+  expires_at TIMESTAMP NULL COMMENT 'Para permisos temporales',
+  
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (granted_by) REFERENCES usuarios(id_usuario),
+  
+  UNIQUE KEY unique_user_role (user_id, role_name),
+  INDEX idx_role (role_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Tabla: HISTORIAL DE CAMBIOS DEL PERFIL
+-- Auditoría de qué cambios hizo el usuario
+CREATE TABLE IF NOT EXISTS profile_change_log (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  user_id INT NOT NULL,
+  step_number INT NOT NULL COMMENT 'Paso que se modificó (0-6)',
+  field_name VARCHAR(100) NOT NULL,
+  old_value TEXT NULL,
+  new_value TEXT NULL,
+  changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  ip_address VARCHAR(45) NULL,
+  user_agent VARCHAR(255) NULL,
+  
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_user_step (user_id, step_number),
+  INDEX idx_changed_at (changed_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- TRIGGER: AUTO-CREAR PROGRESO AL REGISTRAR USUARIO
+DELIMITER $$
+
+CREATE TRIGGER after_user_insert
+AFTER INSERT ON users
+FOR EACH ROW
+BEGIN
+  -- Crear entrada en registration_progress
+  INSERT INTO registration_progress (
+    user_id,
+    current_step,
+    step_1_completed,
+    step_1_completed_at,
+    completion_percentage
+  ) VALUES (
+    NEW.id,
+    1,
+    TRUE,
+    NOW(),
+    20
+  );
+  
+  -- Crear tabla de perfil según member_type
+  IF NEW.member_type IN ('emprendimiento', 'empresa') THEN
+    INSERT INTO venture_profiles (user_id, nombre_emprendimiento)
+    VALUES (NEW.id, '');
+  ELSEIF NEW.member_type IN ('organizacion', 'institucion') THEN
+    INSERT INTO organization_profiles (user_id, nombre_entidad, tipo_entidad)
+    VALUES (NEW.id, '', 'ong');
+  ELSEIF NEW.member_type = 'consumidor' THEN
+    INSERT INTO consumer_profiles (user_id)
+    VALUES (NEW.id);
+  END IF;
+  
+  -- Asignar rol básico
+  INSERT INTO user_roles (user_id, role_name)
+  VALUES (NEW.id, 'usuario_autenticado');
+END$$
+
+DELIMITER ;
+
+-- VISTAS ÚTILES
+-- Vista de usuarios con progreso
+CREATE OR REPLACE VIEW v_users_with_progress AS
+SELECT 
+  u.id,
+  u.email,
+  u.nombre_completo,
+  u.member_type,
+  u.registration_completed,
+  u.registration_approved,
+  u.created_at,
+  rp.current_step,
+  rp.completion_percentage,
+  rp.completed_at,
+  CASE 
+    WHEN u.member_type IN ('emprendimiento', 'empresa') THEN vp.nombre_emprendimiento
+    WHEN u.member_type IN ('organizacion', 'institucion') THEN op.nombre_entidad
+    ELSE u.nombre_completo
+  END AS display_name,
+  CASE
+    WHEN u.member_type IN ('emprendimiento', 'empresa') THEN vp.logo_url
+    WHEN u.member_type IN ('organizacion', 'institucion') THEN op.logo_url
+    ELSE NULL
+  END AS logo_url
+FROM users u
+LEFT JOIN registration_progress rp ON u.id = rp.user_id
+LEFT JOIN venture_profiles vp ON u.id = vp.user_id
+LEFT JOIN organization_profiles op ON u.id = op.user_id;
+
+-- Vista de perfiles completos pendientes de aprobación
+CREATE OR REPLACE VIEW v_pending_approvals AS
+SELECT 
+  u.id,
+  u.email,
+  u.nombre_completo,
+  u.member_type,
+  u.approval_status,
+  rp.completion_percentage,
+  u.created_at,
+  u.reviewed_at,
+  u.rejection_reason,
+  DATEDIFF(NOW(), u.created_at) AS dias_esperando,
+  CASE 
+    WHEN u.member_type IN ('emprendimiento', 'empresa') THEN vp.nombre_emprendimiento
+    WHEN u.member_type IN ('organizacion', 'institucion') THEN op.nombre_entidad
+    ELSE u.nombre_completo
+  END AS display_name
+FROM users u
+INNER JOIN registration_progress rp ON u.id = rp.user_id
+LEFT JOIN venture_profiles vp ON u.id = vp.user_id
+LEFT JOIN organization_profiles op ON u.id = op.user_id
+WHERE u.registration_completed = TRUE
+  AND u.approval_status = 'pending'
+  AND rp.completion_percentage >= 90
+ORDER BY u.created_at ASC;
+
+-- Índices adicionales para performance
+CREATE INDEX idx_venture_sector_etapa ON venture_profiles(sector_id, etapa_negocio);
+CREATE INDEX idx_venture_formal ON venture_profiles(registro_SAT, tiene_patente_comercio);
+CREATE INDEX idx_org_type ON organization_profiles(tipo_entidad);
+
+-- =====================================================
+-- DATOS INICIALES: USUARIO ADMINISTRADOR ROOT
+-- =====================================================
+
+-- Insertar usuario administrador del sistema
+-- Email: admin@sistema.com
+-- Contraseña: admin123 (CAMBIAR EN PRODUCCIÓN)
+INSERT INTO users (
+  email,
+  password_hash,
+  nombre_completo,
+  telefono_whatsapp,
+  member_type,
+  numero_identificacion,
+  fecha_nacimiento,
+  municipio_id,
+  departamento_id,
+  is_active,
+  is_email_verified,
+  registration_completed,
+  registration_approved,
+  approved_at
+) VALUES (
+  'admin@sistema.com',
+  '$2b$10$nDL4MvE8mGuhNBikSj1vq.iPe9N.K9kDNIDBd9Cgc7J7ZeVEbtVoO',
+  'Administrador del Sistema',
+  '50212345678',
+  'organizacion',
+  'CF-001',
+  '1990-01-01',
+  1,
+  20,
+  TRUE,
+  TRUE,
+  TRUE,
+  TRUE,
+  NOW()
+);
+
+-- El trigger after_user_insert creará automáticamente:
+-- - registration_progress (con paso 1 completado)
+-- - organization_profile (vacío)
+-- - user_roles (con rol usuario_autenticado)
+
+-- Actualizar el progreso del administrador a 100% completado
+UPDATE registration_progress 
+SET 
+  current_step = 6,
+  step_1_completed = TRUE,
+  step_2_completed = TRUE,
+  step_3_completed = TRUE,
+  step_4_completed = TRUE,
+  step_5_completed = TRUE,
+  step_6_completed = TRUE,
+  completion_percentage = 100,
+  completed_at = NOW(),
+  last_updated_at = NOW()
+WHERE user_id = (SELECT id FROM users WHERE email = 'admin@sistema.com');
+
+-- Actualizar el perfil de organización del administrador
+UPDATE organization_profiles 
+SET 
+  nombre_entidad = 'Sistema de Emprendedores - Administración',
+  tipo_entidad = 'institucion_publica',
+  descripcion_mision = 'Gestión y administración del Sistema de Emprendedores de Chiquimula',
+  anio_fundacion = YEAR(NOW()),
+  tiene_logo = FALSE,
+  puede_publicar_programas = TRUE,
+  puede_publicar_eventos = TRUE,
+  puede_publicar_noticias = TRUE,
+  sitio_web = 'https://mineco.gob.gt',
+  telefono_contacto = '50212345678'
+WHERE user_id = (SELECT id FROM users WHERE email = 'admin@sistema.com');
+
+-- Agregar rol de administrador
+INSERT INTO user_roles (user_id, role_name) 
+VALUES (
+  (SELECT id FROM users WHERE email = 'admin@sistema.com'),
+  'administrador'
+);
+
+-- Agregar rol de superusuario (nivel más alto)
+INSERT INTO user_roles (user_id, role_name) 
+VALUES (
+  (SELECT id FROM users WHERE email = 'admin@sistema.com'),
+  'super_admin'
+);
 
 -- =====================================================
 -- FIN DEL SCRIPT

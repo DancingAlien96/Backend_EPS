@@ -29,6 +29,15 @@ const Notificacion = require('./Notificacion.model');
 const PreferenciaNotificacion = require('./PreferenciaNotificacion.model');
 const Recordatorio = require('./Recordatorio.model');
 
+// Modelos del sistema de registro progresivo
+const User = require('./User.model');
+const RegistrationProgress = require('./RegistrationProgress.model');
+const VentureProfile = require('./VentureProfile.model');
+const OrganizationProfile = require('./OrganizationProfile.model');
+const ConsumerProfile = require('./ConsumerProfile.model');
+const UserRole = require('./UserRole.model');
+const ProfileChangeLog = require('./ProfileChangeLog.model');
+
 const configurarRelaciones = () => {
   // =====================================================
   // RELACIONES DE USUARIO
@@ -588,6 +597,117 @@ const configurarRelaciones = () => {
   Recordatorio.belongsTo(Usuario, {
     foreignKey: 'id_usuario',
     as: 'usuario'
+  });
+
+  // =====================================================
+  // RELACIONES DEL SISTEMA DE REGISTRO PROGRESIVO
+  // =====================================================
+
+  // USER -> REGISTRATION PROGRESS (1:1)
+  User.hasOne(RegistrationProgress, {
+    foreignKey: 'user_id',
+    as: 'progress'
+  });
+
+  RegistrationProgress.belongsTo(User, {
+    foreignKey: 'user_id',
+    as: 'user'
+  });
+
+  // USER -> PROFILES (1:1 según member_type)
+  User.hasOne(VentureProfile, {
+    foreignKey: 'user_id',
+    as: 'ventureProfile'
+  });
+
+  VentureProfile.belongsTo(User, {
+    foreignKey: 'user_id',
+    as: 'user'
+  });
+
+  User.hasOne(OrganizationProfile, {
+    foreignKey: 'user_id',
+    as: 'organizationProfile'
+  });
+
+  OrganizationProfile.belongsTo(User, {
+    foreignKey: 'user_id',
+    as: 'user'
+  });
+
+  User.hasOne(ConsumerProfile, {
+    foreignKey: 'user_id',
+    as: 'consumerProfile'
+  });
+
+  ConsumerProfile.belongsTo(User, {
+    foreignKey: 'user_id',
+    as: 'user'
+  });
+
+  // USER -> UBICACIÓN
+  User.belongsTo(MunicipioGT, {
+    foreignKey: 'municipio_id',
+    as: 'municipio'
+  });
+
+  User.belongsTo(Departamento, {
+    foreignKey: 'departamento_id',
+    as: 'departamento'
+  });
+
+  // USER -> APROBACIÓN (admin que aprobó)
+  User.belongsTo(Usuario, {
+    foreignKey: 'approved_by',
+    as: 'approver'
+  });
+
+  Usuario.hasMany(User, {
+    foreignKey: 'approved_by',
+    as: 'usersApproved'
+  });
+
+  // USER -> ROLES (1:N)
+  User.hasMany(UserRole, {
+    foreignKey: 'user_id',
+    as: 'roles'
+  });
+
+  UserRole.belongsTo(User, {
+    foreignKey: 'user_id',
+    as: 'user'
+  });
+
+  UserRole.belongsTo(Usuario, {
+    foreignKey: 'granted_by',
+    as: 'granter'
+  });
+
+  // USER -> CHANGE LOG (1:N)
+  User.hasMany(ProfileChangeLog, {
+    foreignKey: 'user_id',
+    as: 'changeLogs'
+  });
+
+  ProfileChangeLog.belongsTo(User, {
+    foreignKey: 'user_id',
+    as: 'user'
+  });
+
+  ProfileChangeLog.belongsTo(User, {
+    foreignKey: 'changed_by',
+    as: 'changer'
+  });
+
+  // VENTURE PROFILE -> SECTOR ECONÓMICO
+  VentureProfile.belongsTo(SectorEconomico, {
+    foreignKey: 'sector_id',
+    as: 'sector'
+  });
+
+  SectorEconomico.hasMany(VentureProfile, {
+    foreignKey: 'sector_id',
+    as: 'ventureProfiles'
   });
 
   console.log('✅ Todas las relaciones de Sequelize han sido configuradas');
