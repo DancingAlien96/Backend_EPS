@@ -8,6 +8,54 @@ const ConsumerProfile = require('../models/ConsumerProfile.model');
 
 class RegistrationController {
   /**
+   * GET /registration/status-email?email=...
+   * Verificar estado de registro por correo (sin autenticación)
+   */
+  static async getStatusByEmail(req, res) {
+    try {
+      const { email } = req.query;
+
+      if (!email) {
+        return res.status(400).json({ error: 'El parámetro email es requerido' });
+      }
+
+      const user = await User.findOne({ where: { email } });
+      if (!user) {
+        return res.json({ exists: false, status: 'not_found' });
+      }
+
+      const approvalStatus = user.approval_status;
+      const isCompleted = !!user.registration_completed;
+      const isApproved = !!user.registration_approved;
+
+      let status = 'incomplete';
+      let message = 'Tu registro aún no está completo. Puedes continuar desde tu perfil.';
+
+      if (approvalStatus === 'approved' || isApproved) {
+        status = 'approved';
+        message = 'Tu cuenta ya fue aprobada. Inicia sesión para continuar.';
+      } else if (approvalStatus === 'rejected') {
+        status = 'rejected';
+        message = 'Tu cuenta fue rechazada. Inicia sesión para actualizar tus datos y reenviar la solicitud.';
+      } else if (approvalStatus === 'pending' || (isCompleted && !isApproved)) {
+        status = 'pending';
+        message = 'Ya tienes una solicitud registrada y está pendiente de revisión por el administrador.';
+      }
+
+      return res.json({
+        exists: true,
+        status,
+        message,
+        registration_completed: isCompleted,
+        registration_approved: isApproved
+      });
+    } catch (error) {
+      console.error('Error al verificar estado por email:', error);
+      return res.status(500).json({ error: error.message });
+    }
+  }
+
+  /**
    * POST /auth/registro/paso-1
    * Crear cuenta (email, contraseña, datos básicos)
    */

@@ -25,9 +25,25 @@ class AuthService {
       departamento_id
     } = userData;
 
-    // Validar que el email no exista
+    // Validar que el email no exista y devolver estado más claro para el frontend
     const existingUser = await User.findOne({ where: { email } });
     if (existingUser) {
+      const approvalStatus = existingUser.approval_status;
+      const isCompleted = !!existingUser.registration_completed;
+      const isApproved = !!existingUser.registration_approved;
+
+      if (approvalStatus === 'pending' || (isCompleted && !isApproved)) {
+        throw new Error('Ya tienes una solicitud registrada y está pendiente de revisión por el administrador.');
+      }
+
+      if (approvalStatus === 'approved' || isApproved) {
+        throw new Error('Tu cuenta ya fue aprobada. Inicia sesión para continuar.');
+      }
+
+      if (approvalStatus === 'rejected') {
+        throw new Error('Tu cuenta fue rechazada previamente. Inicia sesión para actualizar tus datos y reenviar la solicitud.');
+      }
+
       throw new Error('El correo electrónico ya está registrado');
     }
 

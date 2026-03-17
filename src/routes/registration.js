@@ -9,6 +9,8 @@ const { authenticateUser, requireMemberType } = require('../middleware/authUser'
 
 // Paso 1: Crear cuenta
 router.post('/paso-1', RegistrationController.paso1);
+// Público: estado por correo electrónico
+router.get('/status-email', RegistrationController.getStatusByEmail);
 
 // ========================================
 // RUTAS PROTEGIDAS (requieren autenticación)
